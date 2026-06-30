@@ -1,0 +1,29 @@
+appId: com.yozak.claudicator
+productName: Claudicator CLI
+
+directories:
+  output: build
+  buildResources: assets
+
+files:
+  - out/**/*
+
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.productivity
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Claudicator CLI

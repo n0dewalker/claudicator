@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@source "../../../../shared/renderer/src";
+
+@variant dark (&:is(.dark *));
+
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+html.dark, html.dark body {
+  background: #16161a;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 2px;
+}

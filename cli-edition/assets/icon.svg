@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- 02b · Orange on Gray (Claude Design)
+       12 radial bars, center=(128,128), inner r=50, outer r=108,
+       stroke-width=14, round caps. pct=65 → 8 lit / 4 dim.
+       Lit:  #D97757 (Claude Orange)
+       Dim:  #999999 (neutral mid-gray, background-independent) -->
+  <g fill="none" stroke-width="14" stroke-linecap="round">
+    <line x1="128"    y1="78"     x2="128"   y2="20"     stroke="#D97757"/>
+    <line x1="153"    y1="84.70"  x2="182"   y2="34.47"  stroke="#D97757"/>
+    <line x1="171.30" y1="103"    x2="221.53" y2="74"    stroke="#D97757"/>
+    <line x1="178"    y1="128"    x2="236"   y2="128"    stroke="#D97757"/>
+    <line x1="171.30" y1="153"    x2="221.53" y2="182"   stroke="#D97757"/>
+    <line x1="153"    y1="171.30" x2="182"   y2="221.53" stroke="#D97757"/>
+    <line x1="128"    y1="178"    x2="128"   y2="236"    stroke="#D97757"/>
+    <line x1="103"    y1="171.30" x2="74"    y2="221.53" stroke="#D97757"/>
+    <line x1="84.70"  y1="153"    x2="34.47" y2="182"    stroke="#999999"/>
+    <line x1="78"     y1="128"    x2="20"    y2="128"    stroke="#999999"/>
+    <line x1="84.70"  y1="103"    x2="34.47" y2="74"     stroke="#999999"/>
+    <line x1="103"    y1="84.70"  x2="74"    y2="34.47"  stroke="#999999"/>
+  </g>
+</svg>

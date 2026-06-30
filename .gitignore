@@ -1,0 +1,20 @@
+# 依存パッケージ（各 edition / ルート共通）
+node_modules/
+
+# ビルド成果物・中間生成物
+**/build/
+**/out/
+**/dist/
+**/tmp/
+*.tsbuildinfo
+
+# 認証・秘密情報（万一の混入防止）
+.credentials.json
+**/.credentials.json
+.env
+.env.*
+
+# ログ・OS 生成物
+*.log
+.DS_Store
+Thumbs.db
