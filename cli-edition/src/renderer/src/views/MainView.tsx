@@ -413,29 +413,47 @@ export function MainView() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 items-end">
-          <div>
-            <div className="flex items-center gap-1 mb-1">
-              <span className={label.replace('mb-1', '')}>{t.refreshInterval}</span>
-              <div className="relative group">
-                <span className="cursor-help text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-xs">ⓘ</span>
-                <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity absolute left-0 bottom-full mb-1 w-72 p-3 rounded bg-white dark:bg-[#23232a] border border-gray-200 dark:border-white/10 text-xs text-gray-600 dark:text-gray-300 leading-relaxed shadow-lg z-50 pointer-events-none">
-                  {t.refreshIntervalHelp}
+        {/* 更新間隔と自動起動。更新間隔は 3 未満（レート制限リスクが上がるゾーン）で、
+            キャプションと ⓘ アイコンが status.high (#FF7C80) に変色して控えめに警告する。
+            アラート・モーダルは出さない（自分の設定なので過剰な干渉を避ける）。 */}
+        {(() => {
+          const parsedInterval = parseInt(intervalStr, 10)
+          const isRefreshIntervalTooShort = Number.isFinite(parsedInterval) && parsedInterval < 3
+          return (
+            <div className="grid grid-cols-2 gap-2 items-start">
+              <div>
+                <div className="flex items-center gap-1 mb-1">
+                  <span className={label.replace('mb-1', '')}>{t.refreshInterval}</span>
+                  <div className="relative group">
+                    <span className={`cursor-help transition-colors text-xs ${
+                      isRefreshIntervalTooShort
+                        ? 'text-[#FF7C80]'
+                        : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                    }`}>ⓘ</span>
+                    <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity absolute left-0 bottom-full mb-1 w-72 p-3 rounded bg-white dark:bg-[#23232a] border border-gray-200 dark:border-white/10 text-xs text-gray-600 dark:text-gray-300 leading-relaxed shadow-lg z-50 pointer-events-none">
+                      {t.refreshIntervalHelp}
+                    </div>
+                  </div>
                 </div>
+                <input type="number" min="1" max="10" step="1" className={inputCls}
+                  value={intervalStr}
+                  onChange={(e) => setIntervalStr(e.target.value)}
+                  onBlur={handleIntervalBlur} />
+                <p className={`text-[10px] mt-1 leading-relaxed ${
+                  isRefreshIntervalTooShort ? 'text-[#FF7C80]' : 'text-gray-500 dark:text-gray-500'
+                }`}>
+                  {isRefreshIntervalTooShort ? t.refreshIntervalTooShort : t.refreshIntervalRecommended}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <input type="checkbox" id="autostart" checked={settings.autoStart}
+                  onChange={(e) => apply({ autoStart: e.target.checked })}
+                  className="accent-blue-600 cursor-pointer" />
+                <label htmlFor="autostart" className="text-xs text-gray-700 dark:text-gray-300 cursor-pointer">{t.autoStart}</label>
               </div>
             </div>
-            <input type="number" min="1" max="10" step="1" className={inputCls}
-              value={intervalStr}
-              onChange={(e) => setIntervalStr(e.target.value)}
-              onBlur={handleIntervalBlur} />
-          </div>
-          <div className="flex items-center gap-2 pb-1">
-            <input type="checkbox" id="autostart" checked={settings.autoStart}
-              onChange={(e) => apply({ autoStart: e.target.checked })}
-              className="accent-blue-600 cursor-pointer" />
-            <label htmlFor="autostart" className="text-xs text-gray-700 dark:text-gray-300 cursor-pointer">{t.autoStart}</label>
-          </div>
-        </div>
+          )
+        })()}
       </div>
     </>
   )

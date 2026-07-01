@@ -69,6 +69,8 @@ export const en: Dict = {
   refreshInterval: 'Refresh interval (min)',
   refreshIntervalAbout: 'About refresh interval (recommended: 3 min or more)',
   refreshIntervalHelp: 'Too short an interval may temporarily block usage retrieval due to Claude server rate limits.',
+  refreshIntervalRecommended: 'Recommended: 3 min or more',
+  refreshIntervalTooShort: 'Recommended: 3 min or more (may trigger rate limits)',
   language: 'Language',
   theme: 'Theme',
   dark: 'Dark',
