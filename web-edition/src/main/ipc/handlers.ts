@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow, shell, app, nativeTheme } from 'electron'
 import { getSettings, updateSettings, resetSettings } from '@shared/main/settings/SettingsStore'
-import { refresh, getState, restartPolling } from '../usage/UsageService'
-import { openSettings, updateTrayIcon, sendToPopup, sendSettingsToPopup, adjustWindowPosition } from '../tray/TrayController'
+import { refresh, restartPolling } from '../usage/UsageService'
+import { openSettings, updateTrayIcon, sendToPopup, sendSettingsToPopup, adjustWindowPosition, getEffectiveState } from '../tray/TrayController'
 import { applyAutoLaunch } from '@shared/main/startup/AutoLaunch'
 import { getCachedUpdateInfo } from '@shared/main/update/UpdateChecker'
 import { getColorModeSamples } from '@shared/main/tray/IconGenerator'
@@ -13,11 +13,11 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('update:get', () => getCachedUpdateInfo())
 
-  ipcMain.handle('usage:get', () => getState())
+  ipcMain.handle('usage:get', () => getEffectiveState())
 
   ipcMain.handle('usage:refresh', async () => {
     await refresh()
-    return getState()
+    return getEffectiveState()
   })
 
   ipcMain.handle('settings:get', () => getSettings())
@@ -29,7 +29,7 @@ export function registerIpcHandlers(): void {
     if (partial.autoStart !== undefined) applyAutoLaunch(partial.autoStart)
     if (partial.refreshInterval !== undefined) restartPolling()
     if (partial.theme !== undefined) nativeTheme.themeSource = partial.theme
-    const state = getState()
+    const state = getEffectiveState()
     updateTrayIcon(state)
     sendToPopup(state)
     sendSettingsToPopup(getSettings())
@@ -41,7 +41,7 @@ export function registerIpcHandlers(): void {
     applyAutoLaunch(settings.autoStart)
     restartPolling()
     nativeTheme.themeSource = settings.theme ?? 'dark'
-    const state = getState()
+    const state = getEffectiveState()
     updateTrayIcon(state)
     sendToPopup(state)
     sendSettingsToPopup(settings)
@@ -50,7 +50,7 @@ export function registerIpcHandlers(): void {
   ipcMain.on('auth:login', async () => {
     await openLoginWindow()
     await refresh()
-    const s = getState()
+    const s = getEffectiveState()
     updateTrayIcon(s)
     sendToPopup(s)
   })
@@ -58,7 +58,7 @@ export function registerIpcHandlers(): void {
   ipcMain.on('auth:logout', async () => {
     await logout()
     await refresh()
-    const s = getState()
+    const s = getEffectiveState()
     updateTrayIcon(s)
     sendToPopup(s)
   })

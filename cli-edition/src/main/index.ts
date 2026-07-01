@@ -1,7 +1,7 @@
 import { app, Menu, powerMonitor, nativeTheme } from 'electron'
 import { initialize as initAuth } from './auth/AuthManager'
 import { startPolling, onUpdate, refresh } from './usage/UsageService'
-import { initTray, updateTrayIcon, sendToPopup, openSettings } from './tray/TrayController'
+import { initTray, updateTrayIcon, sendToPopup, openSettings, getEffectiveState } from './tray/TrayController'
 import { getSettings } from '@shared/main/settings/SettingsStore'
 import { applyAutoLaunch } from '@shared/main/startup/AutoLaunch'
 import { checkForUpdate } from '@shared/main/update/UpdateChecker'
@@ -41,7 +41,8 @@ app.whenReady().then(async () => {
     currentVersion: app.getVersion(),
   })
 
-  onUpdate((state) => {
+  onUpdate(() => {
+    const state = getEffectiveState()
     updateTrayIcon(state)
     sendToPopup(state)
   })

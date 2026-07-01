@@ -30,6 +30,12 @@ function getDemoState(): UsageState {
     fetchedAt: Date.now(),
   }
 }
+
+// DEMO_MODE 判定の一元窓口。tray／popup／IPC の全経路がここを通ることで、
+// 「トレイは demo なのに popup は real」のような部分デモ状態を構造的に防ぐ。
+export function getEffectiveState(): UsageState {
+  return DEMO_MODE ? getDemoState() : getState()
+}
 // ────────────────────────────────────────────────────────────────────────────
 
 let tray: Tray | null = null
@@ -146,7 +152,7 @@ function showMainWindow(): void {
     mainWin = createMainWindow(pos)
     mainWin.once('ready-to-show', () => {
       if (!mainWin) return
-      mainWin.webContents.send('usage:update', DEMO_MODE ? getDemoState() : getState())
+      mainWin.webContents.send('usage:update', getEffectiveState())
       mainWin.webContents.send('settings:update', getSettings())
       mainWin.setBounds({ x: pos.x, y: pos.y, width: WIN_W, height: WIN_H }, false)
       mainWin.show()
@@ -197,12 +203,11 @@ export function initTray(): void {
 export function updateTrayIcon(state: UsageState): void {
   if (!tray) return
   const settings = getSettings()
-  const effective = DEMO_MODE ? getDemoState() : state
-  const fh = effective.data?.five_hour?.utilization ?? 0
-  const sd = effective.data?.seven_day?.utilization ?? 0
-  const sds = effective.data?.seven_day_sonnet?.utilization
-  const sdd = effective.data?.seven_day_claude_design?.utilization
-  const errorMode = effective.error !== null
+  const fh = state.data?.five_hour?.utilization ?? 0
+  const sd = state.data?.seven_day?.utilization ?? 0
+  const sds = state.data?.seven_day_sonnet?.utilization
+  const sdd = state.data?.seven_day_claude_design?.utilization
+  const errorMode = state.error !== null
 
   // データ駆動: API がその枠を返している（non-null）ときだけバーを出す。
   // Claude Design は 2026-05 に共有枠へ統合され null になったため自動で非表示になる
@@ -215,7 +220,7 @@ export function updateTrayIcon(state: UsageState): void {
 
   let tooltip: string
   if (errorMode) {
-    tooltip = `Claudicator CLI\n${getTrayErrorMessage(effective.error!)}`
+    tooltip = `Claudicator CLI\n${getTrayErrorMessage(state.error!)}`
   } else {
     const lines = [`Claudicator CLI`, `5h: ${fh}%  7d: ${sd}%`]
     if (settings.trayShowSonnet && sds !== undefined) lines.push(`Sonnet: ${sds}%`)
