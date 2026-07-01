@@ -1,6 +1,6 @@
 {
   "name": "claudicator-web",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "productName": "Claudicator",
   "description": "Claudicator — Claude usage indicator",
   "main": "out/main/index.js",

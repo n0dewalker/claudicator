@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { UsageSection } from '@shared/renderer/src/components/UsageSection'
 import { Tabs } from '@shared/renderer/src/components/Tabs'
+import { UpdateBanner } from '@shared/renderer/src/components/UpdateBanner'
 import { WebLoginPrompt } from '../components/WebLoginPrompt'
 import { ErrorView } from '@shared/renderer/src/components/ErrorView'
 import { ThresholdZigzagBar } from '@shared/renderer/src/components/ThresholdZigzagBar'
 import { getDict } from '@shared/renderer/src/i18n'
-import type { UsageState, Settings } from '@shared/main/types'
+import type { UsageState, Settings, UpdateInfo } from '@shared/main/types'
 
 const TIMEZONES = [
   'auto',
@@ -31,9 +32,11 @@ export function MainView() {
   const [colorSamples, setColorSamples] =
     useState<Record<'none' | 'item' | 'usage', { donut: string; bar: string }> | null>(null)
   const [confirmingReset, setConfirmingReset] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
 
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
+    window.electronAPI.getUpdateInfo().then(setUpdateInfo)
     window.electronAPI.getSettings().then((s) => {
       setSettings(s)
       setIntervalStr(String(s.refreshInterval))
@@ -446,6 +449,14 @@ export function MainView() {
   return (
     <div className="relative bg-white dark:bg-[#16161a] text-gray-900 dark:text-gray-100">
       {resetModal}
+      {updateInfo?.available && updateInfo.latestVersion && updateInfo.url && (
+        <UpdateBanner
+          version={updateInfo.latestVersion}
+          url={updateInfo.url}
+          label={t.updateAvailable}
+          downloadLabel={t.updateDownload}
+        />
+      )}
       <div className="px-4 py-3">
 
         {/* ── Account info (top) ── */}
