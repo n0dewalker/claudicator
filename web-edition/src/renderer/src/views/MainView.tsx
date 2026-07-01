@@ -438,11 +438,9 @@ export function MainView() {
   )
 
   const aboutContent = (
-    <div className="py-2">
-      <div className="flex items-baseline gap-2">
-        <span className="text-xs text-gray-500 dark:text-gray-400">{t.version}</span>
-        <span className="text-sm font-mono text-gray-800 dark:text-gray-200">v{appVersion}</span>
-      </div>
+    <div>
+      <label className={label}>{t.version}</label>
+      <div className="text-xs text-gray-900 dark:text-gray-100">v{appVersion}</div>
     </div>
   )
 
