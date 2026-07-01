@@ -6,7 +6,7 @@ import { WebLoginPrompt } from '../components/WebLoginPrompt'
 import { ErrorView } from '@shared/renderer/src/components/ErrorView'
 import { ThresholdZigzagBar } from '@shared/renderer/src/components/ThresholdZigzagBar'
 import { getDict } from '@shared/renderer/src/i18n'
-import type { UsageState, Settings, UpdateInfo } from '@shared/main/types'
+import type { UsageState, Settings, UpdateInfo, OrgInfo } from '@shared/main/types'
 
 const TIMEZONES = [
   'auto',
@@ -33,6 +33,8 @@ export function MainView() {
     useState<Record<'none' | 'item' | 'usage', { donut: string; bar: string }> | null>(null)
   const [confirmingReset, setConfirmingReset] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [orgs, setOrgs] = useState<OrgInfo[]>([])
+  const [orgMenuOpen, setOrgMenuOpen] = useState(false)
 
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
@@ -42,14 +44,18 @@ export function MainView() {
       setIntervalStr(String(s.refreshInterval))
     })
     window.electronAPI.getUsage().then(setState)
+    window.electronAPI.listOrganizations().then(setOrgs).catch(() => setOrgs([]))
 
     const unsubUsage = window.electronAPI.onUsageUpdate((s) => setState(s))
     const unsubSettings = window.electronAPI.onSettingsUpdate((s) => {
       setSettings(s)
       setIntervalStr(String(s.refreshInterval))
     })
-    // ウィンドウ再表示のたびに使用量タブへ戻す
-    const unsubShown = window.electronAPI.onWindowShown(() => setTabResetSignal((n) => n + 1))
+    // ウィンドウ再表示のたびに使用量タブへ戻す + 組織リスト再取得
+    const unsubShown = window.electronAPI.onWindowShown(() => {
+      setTabResetSignal((n) => n + 1)
+      window.electronAPI.listOrganizations().then(setOrgs).catch(() => setOrgs([]))
+    })
     return () => { unsubUsage(); unsubSettings(); unsubShown() }
   }, [])
 
@@ -64,6 +70,22 @@ export function MainView() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
   }, [isDark])
+
+  // 組織選択メニューの外側クリック・Escape で閉じる
+  useEffect(() => {
+    if (!orgMenuOpen) return
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target?.closest('[data-org-menu]')) setOrgMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOrgMenuOpen(false) }
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [orgMenuOpen])
 
   if (!settings) return null
 
@@ -457,29 +479,102 @@ export function MainView() {
       )}
       <div className="px-4 py-3">
 
-        {/* ── Account info (top) ── */}
-        <div className="mb-2 flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 dark:bg-[#23232a] px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden />
-            {state.accountEmail && (
-              <span className="truncate max-w-[220px]">{state.accountEmail}</span>
-            )}
-            <div className="relative group shrink-0 ml-1">
-              <span className="cursor-help text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
-                ⓘ {t.accountAbout}
-              </span>
-              <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity absolute left-0 top-full mt-1 w-80 p-3 rounded bg-white dark:bg-[#23232a] border border-gray-200 dark:border-white/10 text-xs text-gray-600 dark:text-gray-300 leading-relaxed shadow-lg z-50 pointer-events-none">
-                {t.accountAboutHelp}
+        {/* ── Account info (top) ── アカウント（＝メール）情報の表示と、組織（org）の切替。
+            SaaS 慣習に沿ってチップ自体をクリックするとドロップダウンで org を選べる。 */}
+        {(() => {
+          const hasMultipleOrgs = orgs.length > 1
+          // チップに [Team] などのバッジを付けるため、現時点で実際に表示されている org を割り出す。
+          // 選択済み ID があればそれ、無ければ Team > Pro > Free の順で最優先。
+          const scoreOrg = (o: OrgInfo): number => (o.plan === 'team' ? 3 : o.plan === 'pro' ? 2 : 1)
+          const effectiveOrg: OrgInfo | null =
+            (settings.selectedOrgId && orgs.find((o) => o.uuid === settings.selectedOrgId))
+            || (orgs.length ? orgs.slice().sort((a, b) => scoreOrg(b) - scoreOrg(a))[0] : null)
+          const planLabel = (plan: OrgInfo['plan']): string =>
+            plan === 'team' ? 'Team' : plan === 'pro' ? 'Pro' : 'Free'
+          const planBadgeCls = (plan: OrgInfo['plan']): string =>
+            plan === 'team' ? 'bg-blue-500/15 text-blue-600 dark:text-blue-300'
+            : plan === 'pro' ? 'bg-purple-500/15 text-purple-600 dark:text-purple-300'
+            : 'bg-gray-500/15 text-gray-500 dark:text-gray-400'
+          const renderPlanBadge = (plan: OrgInfo['plan']) => (
+            <span className={`inline-block px-1.5 rounded text-[10px] font-semibold leading-relaxed ${planBadgeCls(plan)}`}>
+              {planLabel(plan)}
+            </span>
+          )
+          return (
+            <div className="mb-2 flex items-center justify-between gap-2" data-org-menu>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => hasMultipleOrgs && setOrgMenuOpen((v) => !v)}
+                    disabled={!hasMultipleOrgs}
+                    aria-expanded={orgMenuOpen}
+                    className={`inline-flex items-center gap-2 rounded-full bg-gray-100 dark:bg-[#23232a] px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 transition-colors ${
+                      hasMultipleOrgs ? 'hover:bg-gray-200 dark:hover:bg-[#2a2a33] cursor-pointer' : 'cursor-default'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" aria-hidden />
+                    {state.accountEmail && (
+                      <span className="truncate max-w-[160px]">{state.accountEmail}</span>
+                    )}
+                    {hasMultipleOrgs && effectiveOrg && renderPlanBadge(effectiveOrg.plan)}
+                    {hasMultipleOrgs && (
+                      <span className="text-gray-400 dark:text-gray-500 leading-none text-[10px]">▾</span>
+                    )}
+                  </button>
+
+                  {orgMenuOpen && hasMultipleOrgs && (
+                    <div className="absolute top-full left-0 mt-1 min-w-[260px] max-w-[340px] rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#23232a] shadow-lg z-50 py-1">
+                      <button
+                        type="button"
+                        onClick={() => { apply({ selectedOrgId: null }); setOrgMenuOpen(false) }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2a33] transition-colors"
+                      >
+                        <span className="w-4 shrink-0 text-center text-blue-500 dark:text-blue-400">
+                          {settings.selectedOrgId === null ? '✓' : ''}
+                        </span>
+                        <span>{t.orgAuto}</span>
+                      </button>
+                      <div className="border-t border-gray-200 dark:border-white/10 my-1" />
+                      {orgs.map((o) => (
+                        <button
+                          key={o.uuid}
+                          type="button"
+                          onClick={() => { apply({ selectedOrgId: o.uuid }); setOrgMenuOpen(false) }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2a2a33] transition-colors"
+                        >
+                          <span className="w-4 shrink-0 text-center text-blue-500 dark:text-blue-400">
+                            {settings.selectedOrgId === o.uuid ? '✓' : ''}
+                          </span>
+                          {renderPlanBadge(o.plan)}
+                          <span className="truncate">{o.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ⓘ アカウントについて はアカウント（＝メール）単位の切替方法を説明するため残す。
+                    org 切替はチップから、別メアドへの切替はログアウト → 再ログインで、と役割が分かれている。 */}
+                <div className="relative group shrink-0">
+                  <span className="cursor-help text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors text-xs">
+                    ⓘ {t.accountAbout}
+                  </span>
+                  <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity absolute left-0 top-full mt-1 w-80 p-3 rounded bg-white dark:bg-[#23232a] border border-gray-200 dark:border-white/10 text-xs text-gray-600 dark:text-gray-300 leading-relaxed shadow-lg z-50 pointer-events-none">
+                    {t.accountAboutHelp}
+                  </div>
+                </div>
               </div>
+
+              <button
+                onClick={() => window.electronAPI.logout()}
+                className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors shrink-0"
+              >
+                {t.logout}
+              </button>
             </div>
-          </div>
-          <button
-            onClick={() => window.electronAPI.logout()}
-            className="text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-          >
-            {t.logout}
-          </button>
-        </div>
+          )
+        })()}
 
         <Tabs resetSignal={tabResetSignal} items={[
           { key: 'usage', label: t.tabUsage, content: usageContent },

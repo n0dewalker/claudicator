@@ -1,10 +1,13 @@
 import { BrowserWindow, session } from 'electron'
 import { VERBOSE } from '../index'
+import { getSettings } from '@shared/main/settings/SettingsStore'
+import type { OrgInfo } from '@shared/main/types'
 
 const PARTITION = 'persist:claudicator-web'
 
 let loginWin: BrowserWindow | null = null
 let cachedOrgId: string | null = null
+let cachedOrgList: OrgLite[] | null = null
 let cachedEmail: string | null | undefined = undefined // undefined = not yet fetched
 
 function vlog(msg: string, data?: unknown) {
@@ -52,25 +55,61 @@ async function fetchOrganizations(): Promise<OrgLite[]> {
     }))
 }
 
+function classifyPlan(o: OrgLite): OrgInfo['plan'] {
+  if (o.raven_type) return 'team'
+  if (o.billing_type) return 'pro'
+  return 'free'
+}
+
 // 同一メアドで Team / Pro / Free を複数持てるため、`lastActiveOrg` クッキーに頼ると
 // Anthropic 側のデフォルトで個人 Free workspace が拾われ、実際の Team org の使用量が
 // 見えないケースが発生する（Entra SSO 経由で観測、2026-07-01）。
 // 対策として全 org を列挙し、raven_type（"team" 等）> billing_type（有料 Pro 等）> Free
-// の順で優先選択する。
+// の順で優先選択する。ユーザーが settings.selectedOrgId で明示指定した場合はそれを尊重。
 function pickOrg(orgs: OrgLite[]): OrgLite | null {
   if (!orgs.length) return null
   const score = (o: OrgLite): number => (o.raven_type ? 3 : o.billing_type ? 2 : 1)
   return orgs.slice().sort((a, b) => score(b) - score(a))[0]
 }
 
+// キャッシュ付きの org list 取得。UI 側の選択プルダウン用に公開する。
+// 失敗時は空配列を返し、ログイン直後の一過性エラーで UI がクラッシュしないようにする。
+async function getOrgList(): Promise<OrgLite[]> {
+  if (cachedOrgList) return cachedOrgList
+  try {
+    cachedOrgList = await fetchOrganizations()
+    return cachedOrgList
+  } catch (e) {
+    vlog('getOrgList failed', { err: String(e) })
+    return []
+  }
+}
+
+export async function listOrganizations(): Promise<OrgInfo[]> {
+  const orgs = await getOrgList()
+  return orgs.map((o) => ({ uuid: o.uuid, name: o.name, plan: classifyPlan(o) }))
+}
+
 export async function getOrgId(): Promise<string | null> {
   if (cachedOrgId) return cachedOrgId
+  const selected = getSettings().selectedOrgId
   try {
-    const orgs = await fetchOrganizations()
+    const orgs = await getOrgList()
+    // ユーザーが明示的に選択した org が現行の org list に含まれていればそれを使う。
+    // list に含まれていない（削除された・別アカウントに移った）場合は auto-pick に落とす。
+    if (selected) {
+      const hit = orgs.find((o) => o.uuid === selected)
+      if (hit) {
+        cachedOrgId = hit.uuid
+        vlog('getOrgId user-selected', { uuid: hit.uuid, name: hit.name, plan: classifyPlan(hit) })
+        return cachedOrgId
+      }
+      vlog('getOrgId selected org not found in list, falling back to auto', { selected })
+    }
     const picked = pickOrg(orgs)
     if (picked) {
       cachedOrgId = picked.uuid
-      vlog('getOrgId picked', {
+      vlog('getOrgId auto-picked', {
         uuid: picked.uuid,
         name: picked.name,
         raven_type: picked.raven_type,
@@ -99,10 +138,16 @@ export function invalidateCachedOrgId(): void {
   cachedOrgId = null
 }
 
+// org list そのものが変わりうるタイミング（ログアウト、ログインウィンドウ close 直後）に呼ぶ。
+export function invalidateCachedOrgList(): void {
+  cachedOrgList = null
+}
+
 export async function logout(): Promise<void> {
   const ses = getWebSession()
   await ses.clearStorageData({ storages: ['cookies'] })
   cachedOrgId = null
+  cachedOrgList = null
   cachedEmail = undefined
   vlog('logout', { cookies_cleared: true })
 }
@@ -240,8 +285,9 @@ export async function openLoginWindow(): Promise<void> {
     loginWin.on('closed', () => {
       ses.cookies.off('changed', onCookieChanged)
       loginWin = null
-      // Clear org cache so it's re-read from the new session cookies
+      // Clear org caches so they're re-read from the new session cookies
       invalidateCachedOrgId()
+      invalidateCachedOrgList()
       resolve()
     })
 

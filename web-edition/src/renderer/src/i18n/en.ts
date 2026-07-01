@@ -73,6 +73,8 @@ export const en: Dict = {
   theme: 'Theme',
   dark: 'Dark',
   light: 'Light',
+  selectedOrg: 'Organization to display',
+  orgAuto: 'Auto',
   autoStart: 'Launch at Windows startup',
   timezone: 'Timezone',
   timezoneAuto: 'Auto',

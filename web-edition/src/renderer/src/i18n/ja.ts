@@ -72,6 +72,8 @@ export const ja = {
   theme: 'テーマ',
   dark: 'ダーク',
   light: 'ライト',
+  selectedOrg: '表示する組織',
+  orgAuto: '自動',
   autoStart: 'Windows 起動時に自動実行',
   timezone: 'タイムゾーン',
   timezoneAuto: '自動',
