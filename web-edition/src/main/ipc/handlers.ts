@@ -5,7 +5,7 @@ import { openSettings, updateTrayIcon, sendToPopup, sendSettingsToPopup, adjustW
 import { applyAutoLaunch } from '@shared/main/startup/AutoLaunch'
 import { getCachedUpdateInfo } from '@shared/main/update/UpdateChecker'
 import { getColorModeSamples } from '@shared/main/tray/IconGenerator'
-import { openLoginWindow, logout } from '../auth/WebAuthManager'
+import { openLoginWindow, logout, listOrganizations, invalidateCachedOrgId } from '../auth/WebAuthManager'
 import type { Settings } from '@shared/main/types'
 
 export function registerIpcHandlers(): void {
@@ -24,11 +24,19 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('tray:colorSamples', (_e, meterCount?: number) => getColorModeSamples(meterCount ?? 3))
 
-  ipcMain.handle('settings:set', (_e, partial: Partial<Settings>) => {
+  ipcMain.handle('orgs:list', () => listOrganizations())
+
+  ipcMain.handle('settings:set', async (_e, partial: Partial<Settings>) => {
     updateSettings(partial)
     if (partial.autoStart !== undefined) applyAutoLaunch(partial.autoStart)
     if (partial.refreshInterval !== undefined) restartPolling()
     if (partial.theme !== undefined) nativeTheme.themeSource = partial.theme
+    // 対象 org が変わった時は即座に反映する（キャッシュ無効化 + 再取得）。
+    // これをしないと、次回の refresh 間隔まで古い org のデータが見え続ける。
+    if (partial.selectedOrgId !== undefined) {
+      invalidateCachedOrgId()
+      await refresh()
+    }
     const state = getEffectiveState()
     updateTrayIcon(state)
     sendToPopup(state)

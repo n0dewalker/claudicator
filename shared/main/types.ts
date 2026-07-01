@@ -47,6 +47,15 @@ export interface Settings {
   theme: 'dark' | 'light'
   autoStart: boolean
   timezone: string
+  // 表示対象の org UUID。null = 自動選択（Team > Pro > Free）。Web 版のみ使用。
+  selectedOrgId: string | null
+}
+
+// Renderer 表示用の org 情報。listOrganizations が返す最小限のセット。
+export interface OrgInfo {
+  uuid: string
+  name: string
+  plan: 'team' | 'pro' | 'free'
 }
 
 export interface AuthData {

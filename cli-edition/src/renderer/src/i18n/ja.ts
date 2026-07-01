@@ -86,6 +86,8 @@ export const ja = {
   refreshInterval: '更新間隔（分）',
   refreshIntervalAbout: '更新間隔について（推奨：3 分以上）',
   refreshIntervalHelp: '更新間隔を短くしすぎると、Claude のサーバー側のレート制限により、使用量の取得が一時的に止まることがあります。',
+  refreshIntervalRecommended: '推奨: 3 分以上',
+  refreshIntervalTooShort: '推奨: 3 分以上（レート制限の可能性）',
   language: '言語',
   theme: 'テーマ',
   dark: 'ダーク',

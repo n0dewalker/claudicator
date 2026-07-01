@@ -16,6 +16,7 @@ const DEFAULTS: Settings = {
   theme: 'dark',
   autoStart: true,
   timezone: 'auto',
+  selectedOrgId: null,
 }
 
 let store: Store<StoreSchema> | null = null
@@ -67,6 +68,10 @@ export function getSettings(): Settings {
     theme: s.get('theme'),
     autoStart: s.get('autoStart'),
     timezone: s.get('timezone'),
+    selectedOrgId: (() => {
+      const v = s.get('selectedOrgId') as unknown
+      return typeof v === 'string' && v.length > 0 ? v : null
+    })(),
   }
 }
 
