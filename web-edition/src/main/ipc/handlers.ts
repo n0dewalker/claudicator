@@ -4,6 +4,7 @@ import { refresh, getState, restartPolling } from '../usage/UsageService'
 import { openSettings, updateTrayIcon, sendToPopup, sendSettingsToPopup, adjustWindowPosition } from '../tray/TrayController'
 import { applyAutoLaunch } from '@shared/main/startup/AutoLaunch'
 import { getCachedUpdateInfo } from '@shared/main/update/UpdateChecker'
+import { getColorModeSamples } from '@shared/main/tray/IconGenerator'
 import { openLoginWindow, logout } from '../auth/WebAuthManager'
 import type { Settings } from '@shared/main/types'
 
@@ -20,6 +21,8 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('settings:get', () => getSettings())
+
+  ipcMain.handle('tray:colorSamples', (_e, meterCount?: number) => getColorModeSamples(meterCount ?? 3))
 
   ipcMain.handle('settings:set', (_e, partial: Partial<Settings>) => {
     updateSettings(partial)

@@ -29,6 +29,9 @@ export function MainView() {
   const [intervalStr, setIntervalStr] = useState('')
   const [appVersion, setAppVersion] = useState('')
   const [tabResetSignal, setTabResetSignal] = useState(0)
+  const [colorSamples, setColorSamples] =
+    useState<Record<'none' | 'item' | 'usage', { donut: string; bar: string }> | null>(null)
+  const [confirmingReset, setConfirmingReset] = useState(false)
 
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
@@ -47,6 +50,13 @@ export function MainView() {
     const unsubShown = window.electronAPI.onWindowShown(() => setTabResetSignal((n) => n + 1))
     return () => { unsubUsage(); unsubSettings(); unsubShown() }
   }, [])
+
+  // 色モードのサンプルは「表示中のメーター本数」に合わせて生成し直す。
+  // Sonnet も Claude Design も無い時は 2 本、どちらか有れば 3 本（3〜4 本を代表）。
+  const hasOptionalForSamples = !!(state.data?.seven_day_sonnet || state.data?.seven_day_claude_design)
+  useEffect(() => {
+    window.electronAPI.getColorSamples(hasOptionalForSamples ? 3 : 2).then(setColorSamples)
+  }, [hasOptionalForSamples])
 
   const isDark = settings?.theme !== 'light'
   useEffect(() => {
@@ -92,6 +102,11 @@ export function MainView() {
   }
 
   const { data, fetchedAt } = state
+  // 切り替え可能な週間メーター（Sonnet / Claude Design）が API から来ているか。
+  // どちらも無ければ「表示メーター」設定は不要なので隠し、色サンプルも 2 本表示にする。
+  const hasSonnet = !!data?.seven_day_sonnet
+  const hasDesign = !!data?.seven_day_claude_design
+  const hasOptionalMeter = hasSonnet || hasDesign
   const lastUpdated = fetchedAt
     ? new Date(fetchedAt).toLocaleTimeString(lang === 'ja' ? 'ja-JP' : 'en-US', {
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
@@ -101,7 +116,6 @@ export function MainView() {
   const label = 'block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1'
   const inputCls = 'w-full bg-gray-100 dark:bg-[#23232a] border border-gray-300 dark:border-white/10 rounded px-2 py-1 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:border-gray-500 dark:focus:border-gray-400'
   const selectCls = `${inputCls} cursor-pointer`
-  const section = 'text-[11px] font-bold tracking-wide text-gray-500 dark:text-gray-400 mb-2 pb-1 border-b border-gray-200 dark:border-white/10'
 
   const usageContent = (
     <>
@@ -114,66 +128,55 @@ export function MainView() {
       ) : !data ? (
         <p className="text-xs text-gray-400 dark:text-gray-400 py-6 text-center">{t.noData}</p>
       ) : (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-2">
-              <UsageSection
-                label={t.session5h}
-                item={data.five_hour}
-                thresholds={settings.thresholds}
-                colorByUsage={settings.colorByUsage}
-                timezone={settings.timezone}
-                t={t}
-                language={lang}
-              />
-            </div>
-            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <div className="flex items-baseline justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">{t.extraUsage}</span>
-                <span className="text-sm font-mono font-bold text-gray-400">—</span>
-              </div>
-              {data.extra_usage?.is_enabled
-                ? <span className="text-xs text-emerald-500 dark:text-emerald-400">✓ {t.extraEnabled}</span>
-                : <span className="text-xs text-gray-500 dark:text-gray-400">✗ {t.extraNotEnabled}</span>}
-            </div>
+        <div className="grid grid-cols-2 gap-2">
+          {/* 2 カラム単一グリッド。5h は 2 カラム占有、以降（全モデル→Sonnet→Design→追加使用量）は
+              1 カラムずつ流す。Sonnet / Claude Design が null の時はトルツメで繰り上がるため、
+              「両方なし／片方復活／両方復活」のいずれでもレイアウトが破綻しない。 */}
+          <div className="col-span-2">
+            <UsageSection
+              label={t.session5h}
+              item={data.five_hour}
+              timezone={settings.timezone}
+              t={t}
+              language={lang}
+            />
           </div>
-          <div className="border-t border-gray-100 dark:border-gray-800 pt-2">
-            <div className="grid grid-cols-3 gap-2">
-              <UsageSection
-                label={t.weeklyAllModels}
-                item={data.seven_day}
-                thresholds={settings.thresholds}
-                colorByUsage={settings.colorByUsage}
-                timezone={settings.timezone}
-                t={t}
-                language={lang}
-              />
-              {/* データ駆動: API がその週間枠を返している（non-null）ときだけメーターを出す。
-                  Claude Design は 2026-05 に共有枠へ統合され null になったため自動で非表示になる。
-                  Anthropic が枠を復活させれば（omelette が non-null 化すれば）自動で再表示される。 */}
-              {data.seven_day_sonnet && (
-                <UsageSection
-                  label={t.weeklySonnet}
-                  item={data.seven_day_sonnet}
-                  thresholds={settings.thresholds}
-                  colorByUsage={settings.colorByUsage}
-                  timezone={settings.timezone}
-                  t={t}
-                  language={lang}
-                />
-              )}
-              {data.seven_day_claude_design && (
-                <UsageSection
-                  label={t.weeklyClaudeDesign}
-                  item={data.seven_day_claude_design}
-                  thresholds={settings.thresholds}
-                  colorByUsage={settings.colorByUsage}
-                  timezone={settings.timezone}
-                  t={t}
-                  language={lang}
-                />
-              )}
+          <UsageSection
+            label={t.weeklyAllModels}
+            item={data.seven_day}
+            timezone={settings.timezone}
+            t={t}
+            language={lang}
+          />
+          {/* データ駆動: API がその週間枠を返している（non-null）ときだけメーターを出す。
+              Claude Design は 2026-05 に共有枠へ統合され null になったため自動で非表示になる。
+              Anthropic が枠を復活させれば（omelette が non-null 化すれば）自動で再表示される。 */}
+          {data.seven_day_sonnet && (
+            <UsageSection
+              label={t.weeklySonnet}
+              item={data.seven_day_sonnet}
+              timezone={settings.timezone}
+              t={t}
+              language={lang}
+            />
+          )}
+          {data.seven_day_claude_design && (
+            <UsageSection
+              label={t.weeklyClaudeDesign}
+              item={data.seven_day_claude_design}
+              timezone={settings.timezone}
+              t={t}
+              language={lang}
+            />
+          )}
+          <div className="h-full rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">{t.extraUsage}</span>
+              <span className="text-sm font-mono font-bold text-gray-400">—</span>
             </div>
+            {data.extra_usage?.is_enabled
+              ? <span className="text-xs text-emerald-500 dark:text-emerald-400">✓ {t.extraEnabled}</span>
+              : <span className="text-xs text-gray-500 dark:text-gray-400">✗ {t.extraNotEnabled}</span>}
           </div>
         </div>
       )}
@@ -190,25 +193,57 @@ export function MainView() {
     </>
   )
 
-  const settingsContent = (
-    <>
-      <div className="flex justify-end mb-3">
-        <button
-          className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-          onClick={() => window.electronAPI.resetSettings()}
-        >
-          {t.resetSettings}
-        </button>
+  const resetBtn = (
+    <div className="flex justify-end mb-3">
+      <button
+        className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+        onClick={() => setConfirmingReset(true)}
+      >
+        {t.resetSettings}
+      </button>
+    </div>
+  )
+
+  const resetModal = confirmingReset && (
+    <div
+      className="absolute inset-0 z-[100] flex items-center justify-center bg-black/50 px-6"
+      onClick={() => setConfirmingReset(false)}
+    >
+      <div
+        className="w-full max-w-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#23232a] p-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">{t.resetSettings}</p>
+        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mb-1">{t.resetConfirm}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed mb-4">{t.resetConfirmNote}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            className="text-xs px-3 py-1.5 rounded border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-400 transition-colors"
+            onClick={() => setConfirmingReset(false)}
+          >
+            {t.resetCancel}
+          </button>
+          <button
+            className="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            onClick={() => { window.electronAPI.resetSettings(); setConfirmingReset(false) }}
+          >
+            {t.resetConfirmYes}
+          </button>
+        </div>
       </div>
-      <div className="space-y-4">
-        <section className="space-y-3">
-          <h3 className={section}>{t.secTrayIcon}</h3>
+    </div>
+  )
+
+  const trayContent = (
+    <>
+      {resetBtn}
+      <div className="space-y-3">
         <div>
           <div className="flex gap-3 items-start">
             <div className="shrink-0 w-36">
               <label className={label}>{t.trayShape}</label>
               <div className="flex gap-1">
-                {(['bar', 'donut'] as const).map((shape) => (
+                {(['donut', 'bar'] as const).map((shape) => (
                   <button key={shape}
                     className={`flex-1 text-xs py-1 rounded border transition-colors ${
                       settings.trayShape === shape
@@ -256,6 +291,9 @@ export function MainView() {
           </div>
         </div>
 
+        {/* 切り替え可能なメーター（Sonnet / Claude Design）が1つも無いときは、
+            「表示メーター」設定自体が無意味なのでセクションごとトルツメで隠す。 */}
+        {hasOptionalMeter && (
         <div>
           <label className={label}>{t.trayMeters}</label>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -267,14 +305,16 @@ export function MainView() {
               <input type="checkbox" checked readOnly disabled className="accent-blue-600" />
               {t.weeklyAllModels} {t.trayMeterAlwaysShown}
             </label>
-            <label className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-              <input type="checkbox" checked={settings.trayShowSonnet}
-                onChange={(e) => apply({ trayShowSonnet: e.target.checked })} className="accent-blue-600" />
-              {t.weeklySonnet}
-            </label>
-            {/* Claude Design 枠が API から提供されている時だけトグルを出す（データ駆動）。
-                統合で null の現状は非表示。復活すれば自動で再表示される。 */}
-            {(!data || data.seven_day_claude_design) && (
+            {/* Sonnet / Claude Design とも API がその枠を返している時だけトグルを出す（データ駆動）。
+                統合・廃止で null の枠は非表示。復活すれば自動で再表示される。 */}
+            {hasSonnet && (
+              <label className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input type="checkbox" checked={settings.trayShowSonnet}
+                  onChange={(e) => apply({ trayShowSonnet: e.target.checked })} className="accent-blue-600" />
+                {t.weeklySonnet}
+              </label>
+            )}
+            {hasDesign && (
               <label className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
                 <input type="checkbox" checked={settings.trayShowDesign}
                   onChange={(e) => apply({ trayShowDesign: e.target.checked })} className="accent-blue-600" />
@@ -283,23 +323,47 @@ export function MainView() {
             )}
           </div>
         </div>
-        </section>
+        )}
 
-        <section className="space-y-3">
-          <h3 className={section}>{t.secDisplay}</h3>
         <div>
-          <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer mb-2">
-            <input
-              type="checkbox"
-              checked={settings.colorByUsage}
-              onChange={(e) => apply({ colorByUsage: e.target.checked })}
-              className="accent-blue-600"
-            />
-            {t.colorByUsage}
-          </label>
-          {/* 閾値の設定は「使用量に応じて色を変える」がオンのときだけ効く。
-              オフ時は淡色＋操作不可にして従属関係を示す。 */}
-          <div className={settings.colorByUsage ? '' : 'opacity-40 pointer-events-none'}>
+          <label className={label}>{t.colorMode}</label>
+          <div className="flex gap-1 mb-2">
+            {([
+              ['none', t.colorModeNone, t.colorModeNoneHelp],
+              ['item', t.colorModeItem, hasOptionalMeter ? t.colorModeItemHelp : t.colorModeItemHelp2],
+              ['usage', t.colorModeUsage, t.colorModeUsageHelp],
+            ] as const).map(([mode, lbl, help]) => (
+              <div key={mode} className="relative group flex-1">
+                <button
+                  className={`w-full text-xs py-1 rounded border transition-colors ${
+                    settings.colorMode === mode
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-[#23232a] border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-400'
+                  }`}
+                  onClick={() => apply({ colorMode: mode })}>
+                  {lbl}
+                </button>
+                <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-60 p-3 rounded bg-white dark:bg-[#23232a] border border-gray-200 dark:border-white/10 shadow-lg z-50 pointer-events-none">
+                  {colorSamples && (
+                    <div className="flex items-end justify-center gap-5 mb-2">
+                      {(['donut', 'bar'] as const).map((shape) => (
+                        <div key={shape} className="flex flex-col items-center gap-1">
+                          <img src={colorSamples[mode][shape]} alt="" className="w-12 h-12"
+                            style={{ imageRendering: shape === 'bar' ? 'pixelated' : 'auto' }} />
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                            {shape === 'donut' ? t.trayDonut : t.trayBar}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{help}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* しきい値の設定は「使用量に応じて色を変える」のときだけ効く */}
+          <div className={settings.colorMode === 'usage' ? '' : 'opacity-40 pointer-events-none'}>
             <label className={label}>{t.colorThresholds}</label>
             <ThresholdZigzagBar
               medium={settings.thresholds.medium}
@@ -310,7 +374,14 @@ export function MainView() {
             />
           </div>
         </div>
+      </div>
+    </>
+  )
 
+  const generalContent = (
+    <>
+      {resetBtn}
+      <div className="space-y-3">
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className={label}>{t.language}</label>
@@ -338,10 +409,7 @@ export function MainView() {
             </select>
           </div>
         </div>
-        </section>
 
-        <section>
-          <h3 className={section}>{t.secBehavior}</h3>
         <div className="grid grid-cols-2 gap-2 items-end">
           <div>
             <div className="flex items-center gap-1 mb-1">
@@ -365,16 +433,22 @@ export function MainView() {
             <label htmlFor="autostart" className="text-xs text-gray-700 dark:text-gray-300 cursor-pointer">{t.autoStart}</label>
           </div>
         </div>
-        </section>
       </div>
-      {appVersion && (
-        <p className="mt-3 text-right text-xs text-gray-400 dark:text-gray-600">v{appVersion}</p>
-      )}
     </>
   )
 
+  const aboutContent = (
+    <div className="py-2">
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs text-gray-500 dark:text-gray-400">{t.version}</span>
+        <span className="text-sm font-mono text-gray-800 dark:text-gray-200">v{appVersion}</span>
+      </div>
+    </div>
+  )
+
   return (
-    <div className="bg-white dark:bg-[#16161a] text-gray-900 dark:text-gray-100">
+    <div className="relative bg-white dark:bg-[#16161a] text-gray-900 dark:text-gray-100">
+      {resetModal}
       <div className="px-4 py-3">
 
         {/* ── Account info (top) ── */}
@@ -397,7 +471,9 @@ export function MainView() {
 
         <Tabs resetSignal={tabResetSignal} items={[
           { key: 'usage', label: t.tabUsage, content: usageContent },
-          { key: 'settings', label: t.tabSettings, content: settingsContent },
+          { key: 'tray', label: t.tabTrayIcon, content: trayContent },
+          { key: 'general', label: t.tabGeneral, content: generalContent },
+          { key: 'about', label: t.tabAbout, content: aboutContent },
         ]} />
 
       </div>

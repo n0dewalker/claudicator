@@ -41,7 +41,7 @@ export interface Settings {
   trayShowSonnet: boolean
   trayShowDesign: boolean
   thresholds: { medium: number; high: number }
-  colorByUsage: boolean
+  colorMode: 'none' | 'item' | 'usage'
   refreshInterval: number
   language: 'ja' | 'en'
   theme: 'dark' | 'light'

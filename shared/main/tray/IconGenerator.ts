@@ -98,9 +98,23 @@ class PixelCanvas {
 // ─── Color logic ──────────────────────────────────────────────────────────────
 
 // Low: #648FFF, Medium: #F4E04D, High: #FF7C80, At limit: #CC0000
-function barColor(util: number, thresholds: { medium: number; high: number }, errorMode: boolean, colorByUsage: boolean): [number, number, number] {
+// Item-alternate light: #E0EEFF (nearly-white pale blue)
+function barColor(
+  util: number,
+  thresholds: { medium: number; high: number },
+  errorMode: boolean,
+  colorMode: 'none' | 'item' | 'usage',
+  itemIndex: number
+): [number, number, number] {
   if (errorMode) return [136, 136, 136]
-  if (!colorByUsage) return [100, 143, 255]              // 常に青（使用量で色分けしない）
+  if (colorMode === 'none') return [100, 143, 255]        // 常に青
+  if (colorMode === 'item') {
+    if (util >= 100) return [204, 0, 0]                   // at limit #CC0000
+    return itemIndex % 2 === 0
+      ? [100, 143, 255]                                   // even: #648FFF
+      : [224, 238, 255]                                   // odd:  #E0EEFF
+  }
+  // colorMode === 'usage'
   if (util >= 100)               return [204,   0,   0]  // at limit #CC0000
   if (util >= thresholds.high)   return [255, 124, 128]  // high     #FF7C80
   if (util >= thresholds.medium) return [244, 224,  77]  // medium   #F4E04D
@@ -133,12 +147,13 @@ function drawBar(
   yStart: number,
   barH: number,
   errorMode: boolean,
-  colorByUsage: boolean
+  colorMode: 'none' | 'item' | 'usage',
+  itemIndex: number
 ): void {
   const M = 2
   const BW = 28  // 32 - 2*M
 
-  const [r, g, b] = barColor(util, thresholds, errorMode, colorByUsage)
+  const [r, g, b] = barColor(util, thresholds, errorMode, colorMode, itemIndex)
   // Bar shape adopts treatment "A": slate track (#4B5563) for the unused portion.
   const track: [number, number, number] = errorMode ? [80, 80, 80] : [75, 85, 99]
 
@@ -152,7 +167,7 @@ function drawBars(
   utilizations: number[],
   thresholds: { medium: number; high: number },
   errorMode: boolean,
-  colorByUsage: boolean
+  colorMode: 'none' | 'item' | 'usage'
 ): void {
   const layout = BAR_LAYOUTS[utilizations.length]
   if (!layout) return
@@ -172,7 +187,7 @@ function drawBars(
 
   for (let i = 0; i < utilizations.length; i++) {
     const y = layout.top + i * (layout.barH + layout.gap)
-    drawBar(c, utilizations[i], thresholds, y, layout.barH, errorMode, colorByUsage)
+    drawBar(c, utilizations[i], thresholds, y, layout.barH, errorMode, colorMode, i)
   }
 }
 
@@ -203,7 +218,7 @@ function drawDonut(
   utilizations: number[],
   thresholds: { medium: number; high: number },
   errorMode: boolean,
-  colorByUsage: boolean
+  colorMode: 'none' | 'item' | 'usage'
 ): void {
   const SIZE = 32, cx = 16, cy = 16
   const SS = 4  // 4×4 supersampling for anti-aliasing
@@ -219,7 +234,7 @@ function drawDonut(
   const TRACK: [number, number, number] = errorMode ? [80, 80, 80] : [0, 0, 0]
   const GAP:   [number, number, number] = errorMode ? [80, 80, 80] : [ 0,  0,  0]
 
-  const ringColor = utilizations.map((u) => barColor(u, thresholds, errorMode, colorByUsage))
+  const ringColor = utilizations.map((u, i) => barColor(u, thresholds, errorMode, colorMode, i))
   const angles = utilizations.map((u) => (u / 100) * 2 * Math.PI)
 
   for (let py = 0; py < SIZE; py++) {
@@ -312,22 +327,44 @@ function drawErrorBadge(c: PixelCanvas): void {
   c.setPixel(25, 25, 255, 255, 255)
 }
 
+// ── Color-mode preview samples ────────────────────────────────────────────────
+// 設定タブの色モード説明ツールチップ用。実際の設定・使用量によらず固定の使用量で生成。
+// メーター本数は呼び出し側が指定する（Sonnet も Claude Design も無い時は 2 本、
+// どちらか有れば 3 本＝このサンプルで 3〜4 本を代表できる）。
+const SAMPLE_UTILS = [72, 45, 88, 60]
+const SAMPLE_THRESHOLDS = { medium: 50, high: 75 }
+
+export interface ColorSample {
+  donut: string
+  bar: string
+}
+
+export function getColorModeSamples(meterCount = 3): Record<'none' | 'item' | 'usage', ColorSample> {
+  const n = Math.max(1, Math.min(4, Math.round(meterCount)))
+  const utils = SAMPLE_UTILS.slice(0, n)
+  const make = (mode: 'none' | 'item' | 'usage', shape: 'bar' | 'donut'): string =>
+    generateTrayIcon(utils, SAMPLE_THRESHOLDS, shape, { enabled: false, divisions: 4 }, false, mode).toDataURL()
+  const pair = (mode: 'none' | 'item' | 'usage'): ColorSample =>
+    ({ donut: make(mode, 'donut'), bar: make(mode, 'bar') })
+  return { none: pair('none'), item: pair('item'), usage: pair('usage') }
+}
+
 export function generateTrayIcon(
   utilizations: number[],
   thresholds: { medium: number; high: number },
   trayShape: 'bar' | 'donut' = 'bar',
   gridOpts: { enabled: boolean; divisions: number } = { enabled: false, divisions: 4 },
   errorMode: boolean = false,
-  colorByUsage: boolean = true
+  colorMode: 'none' | 'item' | 'usage' = 'none'
 ): NativeImage {
   const utils = utilizations.length === 0 ? [0] : utilizations.slice(0, 4)
   const c = new PixelCanvas(32, 32)
 
   if (trayShape === 'donut') {
-    drawDonut(c, utils, thresholds, errorMode, colorByUsage)
+    drawDonut(c, utils, thresholds, errorMode, colorMode)
     if (gridOpts.enabled && !errorMode) drawDonutGrid(c, utils, gridOpts.divisions)
   } else {
-    drawBars(c, utils, thresholds, errorMode, colorByUsage)
+    drawBars(c, utils, thresholds, errorMode, colorMode)
     if (gridOpts.enabled && !errorMode) drawBarGrid(c, utils, gridOpts.divisions)
   }
 

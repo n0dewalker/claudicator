@@ -10,7 +10,7 @@ const DEFAULTS: Settings = {
   trayShowSonnet: true,
   trayShowDesign: false,
   thresholds: { medium: 50, high: 75 },
-  colorByUsage: false,
+  colorMode: 'none',
   refreshInterval: 3,
   language: 'ja',
   theme: 'dark',
@@ -45,7 +45,13 @@ export function getSettings(): Settings {
       const high   = typeof t?.high   === 'number' ? t.high   : 75
       return { medium, high }
     })(),
-    colorByUsage: s.get('colorByUsage') ?? false,
+    colorMode: (() => {
+      const v = s.get('colorMode') as unknown
+      if (v === 'none' || v === 'item' || v === 'usage') return v
+      // migrate from old boolean colorByUsage
+      const old = (s as unknown as { get(k: string): unknown }).get('colorByUsage')
+      return old === true ? 'usage' : 'none'
+    })(),
     refreshInterval: (() => {
       const raw = s.get('refreshInterval')
       if (typeof raw !== 'number') return 3

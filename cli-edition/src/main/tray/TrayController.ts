@@ -37,7 +37,7 @@ let mainWin: BrowserWindow | null = null
 let lastBlurAt = 0
 
 const WIN_W = 760
-const WIN_H = 670
+const WIN_H = 520
 
 function calcWindowPos(): { x: number; y: number } {
   if (!tray) return { x: 100, y: 100 }
@@ -186,7 +186,7 @@ function toggleMainWindow(): void {
 
 export function initTray(): void {
   const settings = getSettings()
-  tray = new Tray(generateTrayIcon([0, 0], settings.thresholds, settings.trayShape, { enabled: settings.trayGridEnabled, divisions: settings.trayGridDivisions }, false, settings.colorByUsage))
+  tray = new Tray(generateTrayIcon([0, 0], settings.thresholds, settings.trayShape, { enabled: settings.trayGridEnabled, divisions: settings.trayGridDivisions }, false, settings.colorMode))
   tray.setToolTip('Claudicator CLI')
 
   tray.on('click', () => toggleMainWindow())
@@ -211,7 +211,7 @@ export function updateTrayIcon(state: UsageState): void {
   if (settings.trayShowSonnet && sds !== undefined) utils.push(sds)
   if (settings.trayShowDesign && sdd !== undefined) utils.push(sdd)
 
-  tray.setImage(generateTrayIcon(utils, settings.thresholds, settings.trayShape, { enabled: settings.trayGridEnabled, divisions: settings.trayGridDivisions }, errorMode, settings.colorByUsage))
+  tray.setImage(generateTrayIcon(utils, settings.thresholds, settings.trayShape, { enabled: settings.trayGridEnabled, divisions: settings.trayGridDivisions }, errorMode, settings.colorMode))
 
   let tooltip: string
   if (errorMode) {

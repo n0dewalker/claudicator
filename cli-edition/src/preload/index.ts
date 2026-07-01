@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { UsageState, Settings, UpdateInfo } from '@shared/main/types'
+import type { ColorSample } from '@shared/main/tray/IconGenerator'
 
 const api = {
   getAppVersion: (): Promise<string> =>
@@ -16,6 +17,9 @@ const api = {
 
   getSettings: (): Promise<Settings> =>
     ipcRenderer.invoke('settings:get'),
+
+  getColorSamples: (meterCount?: number): Promise<Record<'none' | 'item' | 'usage', ColorSample>> =>
+    ipcRenderer.invoke('tray:colorSamples', meterCount),
 
   setSettings: (partial: Partial<Settings>): Promise<void> =>
     ipcRenderer.invoke('settings:set', partial),
