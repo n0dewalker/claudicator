@@ -1,6 +1,6 @@
 {
   "name": "claudicator",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "productName": "Claudicator CLI",
   "description": "Claudicator CLI — Claude usage indicator",
   "main": "out/main/index.js",
