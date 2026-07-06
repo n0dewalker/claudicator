@@ -18,19 +18,35 @@ export async function fetchUsage(): Promise<UsageData> {
   const url = `https://claude.ai/api/organizations/${orgId}/usage`
 
   let bodyText: string
+  let httpStatus: number
   try {
-    bodyText = await fetchViaWindow(url)
+    const res = await fetchViaWindow(url)
+    bodyText = res.body
+    httpStatus = res.status
   } catch (e) {
     vlog('fetchViaWindow threw', { err: String(e) })
     if (String(e).includes('timeout')) throw new UsageApiError('network_error')
     throw new UsageApiError('network_error')
   }
 
+  // HTTP ステータスで先に分類する。障害時（2026-07-07 観測）は 503 + プレーンテキスト
+  // が返り、JSON 解析失敗経由だと unknown_error / auth_invalid に化けてしまうため。
+  if (httpStatus === 401 || httpStatus === 403) {
+    vlog('HTTP auth error', { status: httpStatus })
+    invalidateCachedOrgId()
+    throw new UsageApiError('auth_invalid', httpStatus)
+  }
+  if (httpStatus === 429) throw new UsageApiError('rate_limited', httpStatus)
+  if (httpStatus >= 500) {
+    vlog('HTTP server error', { status: httpStatus, preview: bodyText.slice(0, 120) })
+    throw new UsageApiError('server_error', httpStatus)
+  }
+
   let json: unknown
   try {
     json = JSON.parse(bodyText)
   } catch {
-    vlog('JSON parse failed', { preview: bodyText.slice(0, 200) })
+    vlog('JSON parse failed', { status: httpStatus, preview: bodyText.slice(0, 200) })
     throw new UsageApiError('unknown_error')
   }
 

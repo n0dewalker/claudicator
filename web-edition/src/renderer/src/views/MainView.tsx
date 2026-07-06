@@ -141,9 +141,13 @@ export function MainView() {
   const inputCls = 'w-full bg-gray-100 dark:bg-[#23232a] border border-gray-300 dark:border-white/10 rounded px-2 py-1 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:border-gray-500 dark:focus:border-gray-400'
   const selectCls = `${inputCls} cursor-pointer`
 
+  // 未ログイン表示中に「最終更新: HH:MM:SS」が残っていると、ログイン済みなのか
+  // どうかユーザーが混乱するため、ログインプロンプト表示中はフッターの時刻も隠す。
+  const showLoginPrompt = state.error === 'unauthenticated' || state.error === 'session_expired'
+
   const usageContent = (
     <>
-      {(state.error === 'unauthenticated' || state.error === 'session_expired') ? (
+      {showLoginPrompt ? (
         <WebLoginPrompt t={t} />
       ) : state.error ? (
         <ErrorView error={state.error} t={t} onRetry={handleRefresh} retrying={refreshing} />
@@ -203,7 +207,7 @@ export function MainView() {
         </div>
       )}
       <div className="flex items-center justify-between mt-2 mb-2 text-xs text-gray-400 dark:text-gray-500">
-        <span>{lastUpdated ? `${t.lastUpdated}: ${lastUpdated}` : ''}</span>
+        <span>{!showLoginPrompt && lastUpdated ? `${t.lastUpdated}: ${lastUpdated}` : ''}</span>
         <button
           className="hover:text-gray-700 dark:hover:text-gray-300 transition-colors italic disabled:opacity-40"
           onClick={handleRefresh}

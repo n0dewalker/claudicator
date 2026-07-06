@@ -71,16 +71,18 @@ export async function refresh(): Promise<void> {
           return
         } catch (e2) {
           const err = mapApiErrorCode(e2)
-          state = { ...state, fetchedAt: Date.now(), error: err === 'rate_limited' || err === 'network_error' || err === 'server_error' ? err : 'session_expired', accountEmail }
+          // fetchedAt は「最後にデータ取得に成功した時刻」。失敗時は更新しない
+          // （...state で前回成功時の値を温存する）。
+          state = { ...state, error: err === 'rate_limited' || err === 'network_error' || err === 'server_error' ? err : 'session_expired', accountEmail }
           notify()
           return
         }
       }
-      state = { ...state, fetchedAt: Date.now(), error: 'session_expired', accountEmail }
+      state = { ...state, error: 'session_expired', accountEmail }
       notify()
       return
     }
-    state = { ...state, fetchedAt: Date.now(), error: mapApiErrorCode(e), accountEmail }
+    state = { ...state, error: mapApiErrorCode(e), accountEmail }
   }
   notify()
 }
