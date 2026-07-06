@@ -58,7 +58,9 @@ export async function refresh(): Promise<void> {
     vlog('fetchUsage threw', { raw: String(e), mapped: err })
     state = {
       data: state.data,
-      fetchedAt: Date.now(),
+      // fetchedAt は「最後にデータ取得に成功した時刻」。失敗時に更新すると、
+      // 未ログイン/障害中でも「最終更新: いま」と表示されユーザーを混乱させる。
+      fetchedAt: state.fetchedAt,
       error: err === 'unauthenticated' ? 'unauthenticated' : err,
       accountEmail: prevEmail,
     }

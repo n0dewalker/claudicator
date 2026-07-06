@@ -42,7 +42,13 @@ interface OrgLite {
 }
 
 async function fetchOrganizations(): Promise<OrgLite[]> {
-  const bodyText = await fetchViaWindow('https://claude.ai/api/organizations')
+  const { body: bodyText, status } = await fetchViaWindow('https://claude.ai/api/organizations')
+  // 障害時は 503 + プレーンテキストが返る。JSON.parse に進むと SyntaxError になり
+  // 下流で「org が無い＝認証切れ」と誤分類されるため、HTTP エラーはここで明示的に投げる。
+  if (status >= 400) {
+    vlog('fetchOrganizations http error', { status, preview: bodyText.slice(0, 120) })
+    throw new Error(`http_${status}`)
+  }
   const parsed = JSON.parse(bodyText)
   if (!Array.isArray(parsed)) return []
   return parsed
@@ -72,22 +78,26 @@ function pickOrg(orgs: OrgLite[]): OrgLite | null {
   return orgs.slice().sort((a, b) => score(b) - score(a))[0]
 }
 
-// キャッシュ付きの org list 取得。UI 側の選択プルダウン用に公開する。
-// 失敗時は空配列を返し、ログイン直後の一過性エラーで UI がクラッシュしないようにする。
+// キャッシュ付きの org list 取得。
+// 注意: 失敗時はエラーを投げる。ここで空配列に握りつぶすと、getOrgId が
+// 「org が無い＝認証切れ」と誤分類し、サーバー障害中にユーザーへ不要な
+// 再ログインを促してしまう（2026-07-07 の claude.ai 障害で発生）。
 async function getOrgList(): Promise<OrgLite[]> {
   if (cachedOrgList) return cachedOrgList
-  try {
-    cachedOrgList = await fetchOrganizations()
-    return cachedOrgList
-  } catch (e) {
-    vlog('getOrgList failed', { err: String(e) })
-    return []
-  }
+  cachedOrgList = await fetchOrganizations()
+  return cachedOrgList
 }
 
+// UI（アカウントチップのプルダウン）用。こちらだけ graceful に空配列を返し、
+// 一過性エラーで UI がクラッシュしないようにする。
 export async function listOrganizations(): Promise<OrgInfo[]> {
-  const orgs = await getOrgList()
-  return orgs.map((o) => ({ uuid: o.uuid, name: o.name, plan: classifyPlan(o) }))
+  try {
+    const orgs = await getOrgList()
+    return orgs.map((o) => ({ uuid: o.uuid, name: o.name, plan: classifyPlan(o) }))
+  } catch (e) {
+    vlog('listOrganizations failed', { err: String(e) })
+    return []
+  }
 }
 
 export async function getOrgId(): Promise<string | null> {
@@ -182,16 +192,26 @@ export async function fetchAccountEmail(): Promise<string | null> {
   return null
 }
 
+export interface FetchedResponse {
+  body: string
+  // HTTP ステータスコード。did-navigate が発火しなかった場合は 0（不明）。
+  status: number
+}
+
 // Fetch a URL by navigating a hidden BrowserWindow to it.
 // The browser sends cookies automatically so auth headers are correct.
-// Returns the raw body text (usually JSON for API endpoints).
-export async function fetchViaWindow(url: string, timeoutMs = 15_000): Promise<string> {
+// Returns the raw body text (usually JSON for API endpoints) and the HTTP status.
+// ステータスを返すのは、障害時に API が 503 のプレーンテキスト
+// （"upstream connect error..."）を返し、JSON 解析失敗だけでは
+// 「認証切れ」と「サーバー障害」を区別できないため（2026-07-07 の claude.ai 障害で観測）。
+export async function fetchViaWindow(url: string, timeoutMs = 15_000): Promise<FetchedResponse> {
   return new Promise((resolve, reject) => {
     const win = new BrowserWindow({
       show: false,
       webPreferences: { partition: PARTITION, contextIsolation: true, nodeIntegration: false },
     })
 
+    let httpStatus = 0
     let settled = false
     const timer = setTimeout(() => {
       if (settled) return
@@ -208,11 +228,15 @@ export async function fetchViaWindow(url: string, timeoutMs = 15_000): Promise<s
       if (!win.isDestroyed()) win.destroy()
     }
 
+    win.webContents.on('did-navigate', (_e, _url, httpResponseCode) => {
+      httpStatus = httpResponseCode
+    })
+
     win.webContents.on('did-finish-load', async () => {
       try {
         const body = await win.webContents.executeJavaScript('document.documentElement.innerText')
-        vlog('fetchViaWindow done', { url, body_size: (body as string).length })
-        done(() => resolve(body as string))
+        vlog('fetchViaWindow done', { url, status: httpStatus, body_size: (body as string).length })
+        done(() => resolve({ body: body as string, status: httpStatus }))
       } catch (e) {
         done(() => reject(e))
       }
@@ -229,14 +253,21 @@ export async function fetchViaWindow(url: string, timeoutMs = 15_000): Promise<s
 }
 
 export async function openLoginWindow(): Promise<void> {
-  return new Promise((resolve) => {
-    if (loginWin) {
-      loginWin.show()
-      loginWin.focus()
-      loginWin.once('closed', () => resolve())
-      return
-    }
+  if (loginWin) {
+    const existing = loginWin
+    existing.show()
+    existing.focus()
+    return new Promise((resolve) => existing.once('closed', () => resolve()))
+  }
 
+  // 期限切れセッションの残存クッキーがある状態で /login を開くと、claude.ai が
+  // ロード時に lastActiveOrg を再セット（上書き）し、下の完了監視が即発火して
+  // ウィンドウが一瞬で閉じてしまう（2026-07-07 観測）。ログイン開始＝常に
+  // クリーンなセッションから始めるため、先にクッキーを消す（明示ログアウトと同等。
+  // このウィンドウはログインボタン押下時＝未認証状態でしか開かれないので安全）。
+  await logout()
+
+  return new Promise((resolve) => {
     loginWin = new BrowserWindow({
       width: 520,
       height: 720,
