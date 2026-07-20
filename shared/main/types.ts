@@ -15,6 +15,10 @@ export interface UsageData {
   five_hour: UsageItem | null
   seven_day: UsageItem | null
   seven_day_sonnet: UsageItem | null
+  // 2026-07-20: Fable 5 が Max/Team Premium プランへ組み込まれた（上限の 50% 枠）。
+  // Fable 専用のトップレベルキーは存在せず、新設の `limits` 配列の weekly_scoped
+  // (scope.model.display_name === 'Fable') エントリから抽出する。
+  seven_day_fable: UsageItem | null
   seven_day_claude_design: UsageItem | null
   extra_usage: ExtraUsage | null
 }
@@ -39,6 +43,7 @@ export interface Settings {
   trayGridEnabled: boolean
   trayGridDivisions: number  // 2–20
   trayShowSonnet: boolean
+  trayShowFable: boolean
   trayShowDesign: boolean
   thresholds: { medium: number; high: number }
   colorMode: 'none' | 'item' | 'usage'

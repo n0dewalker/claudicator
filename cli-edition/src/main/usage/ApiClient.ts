@@ -51,8 +51,33 @@ function mapToUsageData(json: unknown): UsageData {
     // 実 API は omelette=null を返すことを確認済み。omelette が Design の正しいキーでない可能性あり。
     // 上の console.log('[ApiClient] response:'…) の全文ダンプで Design 使用時に非null化するキーを確認すること。
     seven_day_claude_design: extractItem(j['seven_day_omelette']),
+    // 2026-07-20: Fable 5 週間枠。トップレベルキーには存在せず、新設の `limits` 配列の
+    // weekly_scoped (scope.model.display_name === 'Fable') エントリから抽出する。
+    seven_day_fable: extractScopedWeekly(j['limits'], 'fable'),
     extra_usage: extractExtraUsage(j['extra_usage']),
   }
+}
+
+// `limits` 配列から、指定モデル名にスコープされた週間メーターを抽出する。
+// エントリ形: { kind:'weekly_scoped', percent, resets_at, scope:{ model:{ display_name } } }
+// 配列が無い/該当なしなら null（後方互換）。
+function extractScopedWeekly(limits: unknown, modelName: string): UsageItem | null {
+  if (!Array.isArray(limits)) return null
+  const target = modelName.toLowerCase()
+  for (const raw of limits) {
+    if (!raw || typeof raw !== 'object') continue
+    const e = raw as Record<string, unknown>
+    if (e['kind'] !== 'weekly_scoped') continue
+    const scope = e['scope'] as Record<string, unknown> | null | undefined
+    const model = scope?.['model'] as Record<string, unknown> | null | undefined
+    const name = model?.['display_name']
+    if (typeof name !== 'string' || name.toLowerCase() !== target) continue
+    return {
+      utilization: typeof e['percent'] === 'number' ? e['percent'] : 0,
+      resets_at: typeof e['resets_at'] === 'string' ? e['resets_at'] : '',
+    }
+  }
+  return null
 }
 
 function extractItem(item: unknown): UsageItem | null {

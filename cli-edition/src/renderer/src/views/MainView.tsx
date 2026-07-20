@@ -56,7 +56,7 @@ export function MainView() {
 
   // 色モードのサンプルは「表示中のメーター本数」に合わせて生成し直す。
   // Sonnet も Claude Design も無い時は 2 本、どちらか有れば 3 本（3〜4 本を代表）。
-  const hasOptionalForSamples = !!(state.data?.seven_day_sonnet || state.data?.seven_day_claude_design)
+  const hasOptionalForSamples = !!(state.data?.seven_day_sonnet || state.data?.seven_day_fable || state.data?.seven_day_claude_design)
   useEffect(() => {
     window.electronAPI.getColorSamples(hasOptionalForSamples ? 3 : 2).then(setColorSamples)
   }, [hasOptionalForSamples])
@@ -108,8 +108,9 @@ export function MainView() {
   // 切り替え可能な週間メーター（Sonnet / Claude Design）が API から来ているか。
   // どちらも無ければ「表示メーター」設定は不要なので隠し、色サンプルも 2 本表示にする。
   const hasSonnet = !!data?.seven_day_sonnet
+  const hasFable = !!data?.seven_day_fable
   const hasDesign = !!data?.seven_day_claude_design
-  const hasOptionalMeter = hasSonnet || hasDesign
+  const hasOptionalMeter = hasSonnet || hasFable || hasDesign
   const lastUpdated = fetchedAt
     ? new Date(fetchedAt).toLocaleTimeString(lang === 'ja' ? 'ja-JP' : 'en-US', {
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
@@ -155,6 +156,17 @@ export function MainView() {
             t={t}
             language={lang}
           />
+          {/* Fable 5 週間枠（2026-07-20 に Max/Team Premium へ組み込まれた）。API が
+              limits 配列で Fable スコープを返している時だけ表示する（データ駆動）。 */}
+          {data.seven_day_fable && (
+            <UsageSection
+              label={t.weeklyFable}
+              item={data.seven_day_fable}
+              timezone={settings.timezone}
+              t={t}
+              language={lang}
+            />
+          )}
           {/* データ駆動: API がその週間枠を返している（non-null）ときだけメーターを出す。
               Claude Design は 2026-05 に共有枠へ統合され null になったため自動で非表示になる。
               Anthropic が枠を復活させれば（omelette が non-null 化すれば）自動で再表示される。 */}
@@ -314,6 +326,13 @@ export function MainView() {
             </label>
             {/* Sonnet / Claude Design とも API がその枠を返している時だけトグルを出す（データ駆動）。
                 統合・廃止で null の枠は非表示。復活すれば自動で再表示される。 */}
+            {hasFable && (
+              <label className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input type="checkbox" checked={settings.trayShowFable}
+                  onChange={(e) => apply({ trayShowFable: e.target.checked })} className="accent-blue-600" />
+                {t.weeklyFable}
+              </label>
+            )}
             {hasSonnet && (
               <label className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
                 <input type="checkbox" checked={settings.trayShowSonnet}
