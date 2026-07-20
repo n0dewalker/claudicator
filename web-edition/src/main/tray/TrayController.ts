@@ -20,6 +20,7 @@ function getDemoState(): UsageState {
     data: {
       five_hour: { utilization: 72, resets_at: in2h },
       seven_day: { utilization: 45, resets_at: in5d },
+      seven_day_fable: { utilization: 16, resets_at: in5d },
       seven_day_sonnet: { utilization: 88, resets_at: in5d },
       // Claude Design は 2026-05 に共有枠へ統合され、本番では API が null を返して自動で非表示になる。
       // デモも本番挙動に合わせて null にする（ダミー値を入れると本番では出ない枠が見えてしまうため）。
@@ -205,6 +206,7 @@ export function updateTrayIcon(state: UsageState): void {
   const settings = getSettings()
   const fh = state.data?.five_hour?.utilization ?? 0
   const sd = state.data?.seven_day?.utilization ?? 0
+  const sdf = state.data?.seven_day_fable?.utilization
   const sds = state.data?.seven_day_sonnet?.utilization
   const sdd = state.data?.seven_day_claude_design?.utilization
   const errorMode = state.error !== null
@@ -213,6 +215,7 @@ export function updateTrayIcon(state: UsageState): void {
   // Claude Design は 2026-05 に共有枠へ統合され null になったため自動で非表示になる
   // （omelette が non-null 化すれば自動で復活）。
   const utils: number[] = [fh, sd]
+  if (settings.trayShowFable && sdf !== undefined) utils.push(sdf)
   if (settings.trayShowSonnet && sds !== undefined) utils.push(sds)
   if (settings.trayShowDesign && sdd !== undefined) utils.push(sdd)
 
@@ -223,6 +226,7 @@ export function updateTrayIcon(state: UsageState): void {
     tooltip = `Claudicator\n${getTrayErrorMessage(state.error!)}`
   } else {
     const lines = [`Claudicator`, `5h: ${fh}%  7d: ${sd}%`]
+    if (settings.trayShowFable && sdf !== undefined) lines.push(`Fable: ${sdf}%`)
     if (settings.trayShowSonnet && sds !== undefined) lines.push(`Sonnet: ${sds}%`)
     if (settings.trayShowDesign && sdd !== undefined) lines.push(`Design: ${sdd}%`)
     tooltip = lines.join('\n')

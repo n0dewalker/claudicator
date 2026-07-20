@@ -4,6 +4,7 @@ export const en: Dict = {
   appName: 'Claudicator CLI — Claude Usage',
   session5h: 'Current session (5h)',
   weeklyAllModels: 'All models (7d)',
+  weeklyFable: 'Fable only (7d)',
   weeklySonnet: 'Sonnet only (7d)',
   weeklyClaudeDesign: 'Claude Design (7d)',
   used: '% used',

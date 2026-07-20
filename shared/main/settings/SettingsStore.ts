@@ -8,6 +8,7 @@ const DEFAULTS: Settings = {
   trayGridEnabled: false,
   trayGridDivisions: 4,
   trayShowSonnet: true,
+  trayShowFable: true,
   trayShowDesign: false,
   thresholds: { medium: 50, high: 75 },
   colorMode: 'none',
@@ -39,6 +40,7 @@ export function getSettings(): Settings {
       return Math.max(2, Math.min(20, Math.round(raw)))
     })(),
     trayShowSonnet: s.get('trayShowSonnet') ?? false,
+    trayShowFable: s.get('trayShowFable') ?? true,
     trayShowDesign: s.get('trayShowDesign') ?? false,
     thresholds: (() => {
       const t = s.get('thresholds') as unknown as Record<string, unknown>

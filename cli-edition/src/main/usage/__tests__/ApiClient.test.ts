@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fetchUsage, UsageApiError } from '../ApiClient'
 
 const MOCK_TOKEN = 'test-token'
-const MOCK_DATA = { five_hour: { utilization: 50, resets_at: '' }, seven_day: null, seven_day_sonnet: null, seven_day_claude_design: null, extra_usage: null }
+const MOCK_DATA = { five_hour: { utilization: 50, resets_at: '' }, seven_day: null, seven_day_sonnet: null, seven_day_fable: null, seven_day_claude_design: null, extra_usage: null }
 
 function makeFetchResponse(status: number, body: unknown): Response {
   return {
@@ -26,6 +26,48 @@ describe('ApiClient.fetchUsage', () => {
     vi.mocked(global.fetch).mockResolvedValue(makeFetchResponse(200, MOCK_DATA))
     const result = await fetchUsage(MOCK_TOKEN)
     expect(result).toEqual(MOCK_DATA)
+  })
+
+  // 2026-07-20 実レスポンス形。Fable 枠は新設の `limits` 配列の weekly_scoped
+  // (scope.model.display_name === 'Fable') から抽出する。
+  it('limits[] with a Fable weekly_scoped entry → seven_day_fable populated', async () => {
+    const body = {
+      five_hour: { utilization: 12, resets_at: '2026-07-20T16:20:00Z' },
+      seven_day: { utilization: 11, resets_at: '2026-07-21T16:00:00Z' },
+      seven_day_sonnet: null,
+      seven_day_omelette: null,
+      extra_usage: null,
+      limits: [
+        { kind: 'session', group: 'session', percent: 12, resets_at: '2026-07-20T16:20:00Z', scope: null },
+        { kind: 'weekly_all', group: 'weekly', percent: 11, resets_at: '2026-07-21T16:00:00Z', scope: null },
+        {
+          kind: 'weekly_scoped', group: 'weekly', percent: 16, resets_at: '2026-07-21T16:00:00Z',
+          scope: { model: { id: null, display_name: 'Fable' }, surface: null }, is_active: true,
+        },
+      ],
+    }
+    vi.mocked(global.fetch).mockResolvedValue(makeFetchResponse(200, body))
+    const result = await fetchUsage(MOCK_TOKEN)
+    expect(result.seven_day_fable).toEqual({ utilization: 16, resets_at: '2026-07-21T16:00:00Z' })
+  })
+
+  it('no limits[] array → seven_day_fable is null', async () => {
+    vi.mocked(global.fetch).mockResolvedValue(makeFetchResponse(200, MOCK_DATA))
+    const result = await fetchUsage(MOCK_TOKEN)
+    expect(result.seven_day_fable).toBeNull()
+  })
+
+  it('limits[] present but no Fable scope → seven_day_fable is null', async () => {
+    const body = {
+      five_hour: null, seven_day: null, seven_day_sonnet: null, extra_usage: null,
+      limits: [
+        { kind: 'session', percent: 5, resets_at: '', scope: null },
+        { kind: 'weekly_scoped', percent: 30, resets_at: '', scope: { model: { display_name: 'Opus' } } },
+      ],
+    }
+    vi.mocked(global.fetch).mockResolvedValue(makeFetchResponse(200, body))
+    const result = await fetchUsage(MOCK_TOKEN)
+    expect(result.seven_day_fable).toBeNull()
   })
 
   it('401 → throws UsageApiError with code auth_invalid', async () => {

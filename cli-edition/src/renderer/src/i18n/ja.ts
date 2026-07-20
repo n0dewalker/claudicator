@@ -2,6 +2,7 @@ export const ja = {
   appName: 'Claudicator CLI — Claude 使用量',
   session5h: '現在のセッション (5h)',
   weeklyAllModels: 'すべてのモデル (7d)',
+  weeklyFable: 'Fable のみ (7d)',
   weeklySonnet: 'Sonnet のみ (7d)',
   weeklyClaudeDesign: 'Claude Design (7d)',
   used: '% 使用',
